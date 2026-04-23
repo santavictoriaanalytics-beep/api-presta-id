@@ -55,9 +55,12 @@ export default function TeamPage() {
       const data = await response.json();
 
       if (data.success) {
-        setMessage({ text: '✅ Miembro invitado con éxito. Se ha enviado un correo de activación.', type: 'success' });
+        setMessage({ 
+          text: `✅ Miembro invitado. CLAVE TEMPORAL: ${data.tempPassword}. Por favor, entrégala al usuario.`, 
+          type: 'success' 
+        });
         setFormData({ email: '', role: 'viewer', displayName: '' });
-        setTimeout(() => setShowAddForm(false), 3000);
+        setTimeout(() => setShowAddForm(false), 8000); // Más tiempo para copiar
       } else {
         setMessage({ text: `❌ Error: ${data.error}`, type: 'error' });
       }

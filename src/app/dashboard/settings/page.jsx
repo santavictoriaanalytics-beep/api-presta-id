@@ -147,7 +147,10 @@ export default function SettingsPage() {
       const data = await response.json();
 
       if (data.success) {
-        setStatus({ type: 'success', message: '✅ Usuario creado y autorizado correctamente.' });
+        setStatus({ 
+          type: 'success', 
+          message: `✅ Usuario creado. CLAVE TEMPORAL: ${data.tempPassword} (Cópiala ahora, no se volverá a mostrar).` 
+        });
         setNewUser({ email: '', role: 'viewer' });
         setIsAddingUser(false);
         fetchUsers();

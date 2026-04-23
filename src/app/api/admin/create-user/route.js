@@ -28,12 +28,15 @@ export async function POST(request) {
       return NextResponse.json({ error: 'El email es obligatorio' }, { status: 400 });
     }
 
-    // 1. Intentamos crear el usuario en Firebase Auth
+    // 1. Intentamos crear el usuario en Firebase Auth con clave temporal
     let userRecord;
+    const tempPassword = Math.random().toString(36).slice(-8) + Math.floor(Math.random() * 100) + '!';
+    
     try {
       userRecord = await auth.createUser({
         email: email,
         emailVerified: false,
+        password: tempPassword,
         displayName: displayName || email.split('@')[0],
         disabled: false,
       });
@@ -72,6 +75,7 @@ export async function POST(request) {
     return NextResponse.json({ 
       success: true, 
       uid: userRecord.uid,
+      tempPassword: tempPassword,
       message: 'Usuario activado correctamente'
     });
 
