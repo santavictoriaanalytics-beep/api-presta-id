@@ -1,20 +1,27 @@
 import { NextResponse } from 'next/server';
 import admin from 'firebase-admin';
 
-// Inicializamos el SDK de Admin (solo una vez)
+// Inicializamos el SDK de Admin
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(), // Usa los permisos nativos de Firebase App Hosting
-    projectId: 'presta-id-monitor-v2'
-  });
+  try {
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault()
+    });
+    console.log('Firebase Admin inicializado correctamente');
+  } catch (error) {
+    console.error('Error inicializando Firebase Admin:', error);
+  }
 }
 
 const auth = admin.auth();
 const db = admin.firestore();
 
 export async function POST(request) {
+  console.log('Recibida petición de creación de usuario');
   try {
-    const { email, displayName, role } = await request.json();
+    const body = await request.json();
+    const { email, displayName, role } = body;
+    console.log('Datos recibidos:', { email, role });
 
     if (!email) {
       return NextResponse.json({ error: 'El email es obligatorio' }, { status: 400 });
