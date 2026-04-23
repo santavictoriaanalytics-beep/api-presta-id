@@ -46,6 +46,8 @@ export default function CustomersPage() {
   const [sortConfig, setSortConfig] = useState({ key: 'last_purchase', direction: 'desc' });
   const [showExplanation, setShowExplanation] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
+  const [activating, setActivating] = useState(false);
+  const [activationMsg, setActivationMsg] = useState('');
 
   // Load Cache on Mount
   useEffect(() => {
@@ -253,6 +255,32 @@ export default function CustomersPage() {
     // En modo estático, los detalles ya están en el objeto del cliente (incluyendo pedidos escaneados)
     setSelectedCustomer(customer);
     setCustomerDetails(customer);
+    setActivationMsg('');
+  };
+
+  const handleActivateUser = async (customer) => {
+    setActivating(true);
+    setActivationMsg('');
+    try {
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: customer.email,
+          displayName: customer.fullname || customer.company
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setActivationMsg('✅ Usuario activado. Se ha enviado un correo de creación.');
+      } else {
+        setActivationMsg(`❌ Error: ${data.error}`);
+      }
+    } catch (err) {
+      setActivationMsg('❌ Error de conexión con el servidor.');
+    } finally {
+      setActivating(false);
+    }
   };
 
   const months = [
@@ -583,6 +611,39 @@ export default function CustomersPage() {
                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem' }}>
                         <Building2 size={16} color="var(--text-secondary)" /> RUT/IVA: {selectedCustomer.vat_number || 'No registrado'}
                      </div>
+                     
+                     <div style={{ marginTop: '0.5rem', padding: '1rem', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.1)' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#60a5fa', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                           <ShieldCheck size={14} /> CONTROL DE ACCESO B2B
+                        </div>
+                        <button 
+                          onClick={() => handleActivateUser(selectedCustomer)}
+                          disabled={activating}
+                          style={{ 
+                            width: '100%', 
+                            padding: '0.6rem', 
+                            background: activating ? 'rgba(255,255,255,0.05)' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '8px', 
+                            fontSize: '0.8rem', 
+                            fontWeight: 700,
+                            cursor: activating ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem'
+                          }}
+                        >
+                          {activating ? 'Activando...' : '🚀 Habilitar Acceso al Dashboard'}
+                        </button>
+                        {activationMsg && (
+                          <div style={{ marginTop: '0.75rem', fontSize: '0.7rem', color: activationMsg.includes('✅') ? '#4ade80' : '#f87171', textAlign: 'center' }}>
+                            {activationMsg}
+                          </div>
+                        )}
+                     </div>
+
                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem', marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(34, 197, 94, 0.05)', borderRadius: '10px', border: '1px solid rgba(34, 197, 94, 0.1)' }}>
                         <ShoppingBag size={16} color="#22c55e" /> 
                         <span style={{ fontWeight: 600 }}>Total Histórico:</span>
