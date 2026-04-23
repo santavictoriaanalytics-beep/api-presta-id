@@ -130,23 +130,35 @@ export default function SettingsPage() {
   const handleAddUser = async (e) => {
     e.preventDefault();
     if (!newUser.email) return;
+    setLoading(true);
+    setStatus({ type: '', message: '' });
 
     try {
-      // Nota: Aquí creamos la entrada en Firestore. El usuario deberá registrarse
-      // con ese email y el sistema le asignará el rol automáticamente.
-      const userRef = doc(collection(db, 'users')); // Creamos con ID aleatorio temporal si no tenemos el UID
-      // Idealmente, usamos el email como ID si el usuario no existe aún para facilidades de búsqueda
-      const id = newUser.email.replace(/\./g, '_');
-      await setDoc(doc(db, 'users', id), {
-        email: newUser.email,
-        role: newUser.role,
-        isPreAuthorized: true
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: newUser.email,
+          role: newUser.role,
+          displayName: newUser.email.split('@')[0] // Nombre temporal basado en email
+        })
       });
-      setNewUser({ email: '', role: 'viewer' });
-      setIsAddingUser(false);
-      fetchUsers();
-    } catch (e) {
-      console.error("Error adding user", e);
+
+      const data = await response.json();
+
+      if (data.success) {
+        setStatus({ type: 'success', message: '✅ Usuario creado y autorizado correctamente.' });
+        setNewUser({ email: '', role: 'viewer' });
+        setIsAddingUser(false);
+        fetchUsers();
+      } else {
+        setStatus({ type: 'error', message: `❌ Error: ${data.error || 'No se pudo crear el usuario'}` });
+      }
+    } catch (err) {
+      console.error("Error adding user", err);
+      setStatus({ type: 'error', message: '❌ Error de conexión con el servidor.' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -285,6 +297,20 @@ export default function SettingsPage() {
         </div>
       ) : (
         <div className="glass-card" style={{ padding: '2rem' }}>
+          {status.message && (
+            <div style={{ 
+              padding: '1rem', 
+              borderRadius: '12px', 
+              marginBottom: '1.5rem',
+              background: status.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              border: `1px solid ${status.type === 'success' ? '#22c55e' : '#ef4444'}`,
+              color: status.type === 'success' ? '#22c55e' : '#ef4444',
+              fontSize: '0.9rem'
+            }}>
+              {status.message}
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
             <h4 style={{ fontWeight: 700 }}>Usuarios Autorizados</h4>
             <button 
