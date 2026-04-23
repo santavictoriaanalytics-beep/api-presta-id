@@ -5,9 +5,10 @@ import admin from 'firebase-admin';
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
-      credential: admin.credential.applicationDefault()
+      credential: admin.credential.applicationDefault(),
+      projectId: 'presta-id-monitor-v2' // Forzamos el ID del proyecto
     });
-    console.log('Firebase Admin inicializado correctamente');
+    console.log('Firebase Admin inicializado en presta-id-monitor-v2');
   } catch (error) {
     console.error('Error inicializando Firebase Admin:', error);
   }
@@ -71,12 +72,15 @@ export async function POST(request) {
     return NextResponse.json({ 
       success: true, 
       uid: userRecord.uid,
-      message: 'Usuario activado correctamente',
-      inviteLink: inviteLink // Puedes copiar este link y dárselo si quieres, o el sistema lo enviará si activas la opción en Firebase
+      message: 'Usuario activado correctamente'
     });
 
   } catch (error) {
-    console.error('Error creando usuario:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('ERROR CRÍTICO EN CREATE-USER:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message,
+      code: error.code || 'unknown'
+    }, { status: 500 });
   }
 }
