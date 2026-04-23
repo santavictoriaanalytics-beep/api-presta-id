@@ -10,10 +10,11 @@ if (!admin.apps.length) {
 }
 
 const auth = admin.auth();
+const db = admin.firestore();
 
 export async function POST(request) {
   try {
-    const { email, displayName } = await request.json();
+    const { email, displayName, role } = await request.json();
 
     if (!email) {
       return NextResponse.json({ error: 'El email es obligatorio' }, { status: 400 });
@@ -37,7 +38,18 @@ export async function POST(request) {
       }
     }
 
-    // 2. Generamos un enlace de restablecimiento de contraseña / activación
+    // 2. Registramos o actualizamos en la colección 'users' de Firestore
+    const userRef = db.collection('users').doc(userRecord.uid);
+    await userRef.set({
+      email: email,
+      displayName: displayName || email.split('@')[0],
+      role: role || 'viewer', // Rol por defecto
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'active'
+    }, { merge: true });
+
+    // 3. Generamos un enlace de activación
     // Esto le enviará un correo oficial de Firebase para que elija su clave
     const actionCodeSettings = {
       url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://presta-id-monitor-v2.web.app'}/login`,

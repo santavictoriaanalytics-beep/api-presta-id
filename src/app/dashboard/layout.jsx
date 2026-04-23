@@ -16,7 +16,8 @@ import {
   Database,
   Menu,
   X,
-  HelpCircle
+  HelpCircle,
+  UserPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -77,7 +78,10 @@ export default function DashboardLayout({ children }) {
     { name: 'Clientes B2B', icon: Users, href: '/dashboard/customers' },
     { name: 'Análisis Mensual', icon: BarChart3, href: '/dashboard/analytics' },
     { name: 'Ayuda / FAQ', icon: HelpCircle, href: '/dashboard/help' },
-    ...(role === 'superadmin' ? [{ name: 'Configuración', icon: Settings, href: '/dashboard/settings' }] : []),
+    ...(role === 'superadmin' ? [
+      { name: 'Configuración', icon: Settings, href: '/dashboard/settings' },
+      { name: 'Gestión de Equipo', icon: UserPlus, href: '/dashboard/team' }
+    ] : []),
   ];
 
   const closeMenu = () => setIsMobileMenuOpen(false);
