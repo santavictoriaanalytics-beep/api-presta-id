@@ -41,9 +41,13 @@ export async function POST(request) {
         disabled: false,
       });
     } catch (createError) {
-      // Si el usuario ya existe, lo recuperamos
+      // Si el usuario ya existe, forzamos la actualización de su clave a la nueva temporal
       if (createError.code === 'auth/email-already-exists') {
         userRecord = await auth.getUserByEmail(email);
+        await auth.updateUser(userRecord.uid, {
+          password: tempPassword
+        });
+        console.log('Usuario existente actualizado con nueva clave temporal');
       } else {
         throw createError;
       }
