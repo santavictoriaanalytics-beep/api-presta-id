@@ -282,8 +282,9 @@ export class PrestaShopClient {
     }
   }
 
-  async scanB2B() {
+  async scanB2B(onProgress = null) {
     try {
+      if (onProgress) onProgress(5, 'Iniciando descubrimiento de clientes...');
       // 1. Discover all B2B IDs in chunks (DEEP SCAN)
       let b2bIdsSet = new Set();
       let offset = 0;
@@ -291,6 +292,7 @@ export class PrestaShopClient {
       let hasMore = true;
 
       while (hasMore) {
+        if (onProgress) onProgress(10, `Descubriendo clientes (Lote ${offset / discoveryChunk + 1})...`);
         const [addrRes, custRes] = await Promise.all([
           this.client.get('/addresses', {
             params: { display: '[id_customer,company,vat_number]', output_format: 'JSON', limit: `${offset},${discoveryChunk}` }
@@ -340,8 +342,13 @@ export class PrestaShopClient {
 
       const idChunks = chunkArray(b2bIds, 150);
       let allCustomers = [];
+      let processed = 0;
 
       for (const chunk of idChunks) {
+        processed += chunk.length;
+        const percent = Math.floor(20 + (processed / b2bIds.length) * 80);
+        if (onProgress) onProgress(percent, `Procesando datos B2B: ${processed} de ${b2bIds.length}...`);
+
         const response = await this.client.get('/customers', {
           params: { display: 'full', output_format: 'JSON', 'filter[id]': `[${chunk.join('|')}]` }
         });

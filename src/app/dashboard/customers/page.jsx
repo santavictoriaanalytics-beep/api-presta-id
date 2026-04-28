@@ -12,6 +12,8 @@ import {
   Building2,
   FileText,
   AlertCircle,
+  CheckCircle2,
+  Loader2,
   Phone,
   MapPin,
   ExternalLink,
@@ -48,6 +50,7 @@ export default function CustomersPage() {
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [activating, setActivating] = useState(false);
   const [activationMsg, setActivationMsg] = useState('');
+  const [syncProgress, setSyncProgress] = useState({ percent: 0, status: '' });
 
   // Load Cache on Mount
   useEffect(() => {
@@ -102,13 +105,20 @@ export default function CustomersPage() {
     }
 
     setIsSyncing(true);
+    setSyncProgress({ percent: 0, status: 'Iniciando conexión...' });
+
     try {
       const { PrestaShopClient } = await import('@/lib/prestashop');
       const client = new PrestaShopClient(psUrl, psKey);
-      const scanResult = await client.scanB2B();
+      
+      const scanResult = await client.scanB2B((percent, status) => {
+        setSyncProgress({ percent, status });
+      });
+
       const b2bCustomers = scanResult.customers || [];
       
       if (b2bCustomers && b2bCustomers.length > 0) {
+        setSyncProgress({ percent: 100, status: '¡Escaneo completado! Guardando datos...' });
         // Save to LocalStorage
         const cacheObj = {
           timestamp: new Date().toISOString(),
@@ -120,10 +130,14 @@ export default function CustomersPage() {
         setPage(1);
         setTotal(b2bCustomers.length);
 
+        // Notify other components/pages that cache has been updated
+        window.dispatchEvent(new Event('b2b-cache-updated'));
+
         // Save to Firestore Cloud (One doc per customer for durability)
         const batchSize = 100;
         for (let i = 0; i < Math.min(b2bCustomers.length, 1000); i += batchSize) {
             const chunk = b2bCustomers.slice(i, i + batchSize);
+            setSyncProgress({ percent: 100, status: `Sincronizando con la nube (${i} de ${b2bCustomers.length})...` });
             await Promise.all(chunk.map(c => 
                 setDoc(doc(db, 'b2b_data', String(c.id)), {
                     ...c,
@@ -131,12 +145,15 @@ export default function CustomersPage() {
                 }, { merge: true })
             ));
         }
+        setSyncProgress({ percent: 100, status: '✅ Sincronización finalizada con éxito.' });
       }
     } catch (err) {
       console.error('Sync failed:', err);
-      setSyncError(`Error durante el escaneo: ${err.message || 'Error desconocido. Verifica tu URL y API Key en Configuración.'}`);
+      setSyncError(`Error durante el escaneo: ${err.message || 'Error desconocido.'}`);
     } finally {
       setIsSyncing(false);
+      // Ocultar mensaje de éxito después de unos segundos
+      setTimeout(() => setSyncProgress({ percent: 0, status: '' }), 5000);
     }
   };
 
@@ -419,6 +436,50 @@ export default function CustomersPage() {
                 </Link>
                 <button onClick={() => setSyncError('')} style={{ background: 'none', border: 'none', color: '#fbbf24', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>✕</button>
               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isSyncing && syncProgress.status && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{ marginBottom: '1.5rem', overflow: 'hidden' }}
+          >
+            <div className="glass-card" style={{ padding: '1.25rem', border: '1px solid var(--accent-primary)', background: 'rgba(59, 130, 246, 0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <Activity className="spinning" size={18} color="var(--accent-primary)" />
+                  <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{syncProgress.status}</span>
+                </div>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-primary)' }}>{syncProgress.percent}%</span>
+              </div>
+              <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${syncProgress.percent}%` }}
+                  style={{ height: '100%', background: 'linear-gradient(90deg, #3b82f6, #60a5fa)', borderRadius: '4px' }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {!isSyncing && syncProgress.status.includes('✅') && (
+           <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            style={{ marginBottom: '1.5rem' }}
+          >
+            <div style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid #22c55e', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.9rem' }}>
+               <CheckCircle2 size={18} />
+               {syncProgress.status}
             </div>
           </motion.div>
         )}

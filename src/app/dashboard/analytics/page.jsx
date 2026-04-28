@@ -22,36 +22,50 @@ export default function AnalyticsPage() {
   const [isUsingCache, setIsUsingCache] = useState(false);
   const [month, setMonth] = useState(''); // '' means all time
   const [year, setYear] = useState(new Date().getFullYear().toString());
+  const [lastSync, setLastSync] = useState(null);
+
+  const loadAnalytics = async () => {
+    setLoading(true);
+    
+    const saved = localStorage.getItem('b2b_cache');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.timestamp) setLastSync(parsed.timestamp);
+        const customersArray = Array.isArray(parsed.customers) ? parsed.customers : (parsed.customers?.customers || []);
+        setCustomers(customersArray);
+        setIsUsingCache(true);
+        setLoading(false);
+        return;
+      } catch (e) { console.error('Cache error'); }
+    }
+
+    try {
+      const res = await fetch('/api/customers?limit=0,200');
+      const data = await res.json();
+      if (Array.isArray(data.customers)) {
+        setCustomers(data.customers);
+      }
+    } catch (err) {
+      console.error('Failed to fetch analytics data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadAnalytics = async () => {
-      setLoading(true);
-      
-      const saved = localStorage.getItem('b2b_cache');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          const customersArray = Array.isArray(parsed.customers) ? parsed.customers : (parsed.customers?.customers || []);
-          setCustomers(customersArray);
-          setIsUsingCache(true);
-          setLoading(false);
-          return;
-        } catch (e) { console.error('Cache error'); }
-      }
-
-      try {
-        const res = await fetch('/api/customers?limit=0,200');
-        const data = await res.json();
-        if (Array.isArray(data.customers)) {
-          setCustomers(data.customers);
-        }
-      } catch (err) {
-        console.error('Failed to fetch analytics data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadAnalytics();
+
+    const handleRefresh = () => loadAnalytics();
+    window.addEventListener('b2b-cache-updated', handleRefresh);
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'b2b_cache') handleRefresh();
+    });
+
+    return () => {
+      window.removeEventListener('b2b-cache-updated', handleRefresh);
+      window.removeEventListener('storage', handleRefresh);
+    };
   }, []);
 
   if (loading) {
@@ -97,7 +111,11 @@ export default function AnalyticsPage() {
 
   // 4. Top Customers for Period
   const topCustomers = [...filteredData]
-    .sort((a, b) => (b.period_spent || 0) - (a.period_spent || 0))
+    .sort((a, b) => {
+      const valA = a.period_spent !== undefined ? a.period_spent : parseFloat(a.total_spent || 0);
+      const valB = b.period_spent !== undefined ? b.period_spent : parseFloat(b.total_spent || 0);
+      return valB - valA;
+    })
     .slice(0, 4);
 
   const months = [
@@ -111,9 +129,35 @@ export default function AnalyticsPage() {
     <div className="fade-in">
       {/* Header Filters */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
-        <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Rendimiento del Segmento</h3>
+        <div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Rendimiento del Segmento</h3>
+          {lastSync && (
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
+              Base de datos: {new Date(lastSync).toLocaleString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
         
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <button 
+            onClick={loadAnalytics}
+            style={{ 
+              background: 'rgba(255,255,255,0.05)', 
+              border: '1px solid rgba(255,255,255,0.1)', 
+              color: 'var(--text-secondary)', 
+              padding: '0.5rem 1rem', 
+              borderRadius: '12px', 
+              fontSize: '0.8rem', 
+              fontWeight: 600, 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <Activity size={14} /> Recargar Datos
+          </button>
+
           <div className="glass-card" style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '12px' }}>
             <Calendar size={16} color="var(--text-secondary)" />
             <select 
@@ -212,7 +256,7 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
                 <div style={{ fontWeight: 700, color: '#22c55e' }}>
-                  {(c.period_spent || parseFloat(c.total_spent)).toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })}
+                  {(c.period_spent !== undefined ? c.period_spent : parseFloat(c.total_spent || 0)).toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })}
                 </div>
               </div>
             ))}

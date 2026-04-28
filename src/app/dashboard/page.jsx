@@ -30,84 +30,99 @@ export default function DashboardPage() {
   const [customers, setCustomers] = useState([]);
   const [stats, setStats] = useState([]);
   const [isUsingCache, setIsUsingCache] = useState(false);
+  const [lastSync, setLastSync] = useState(null);
+
+  const loadDashboard = async () => {
+    setLoading(true);
+    
+    // Try to load from cache
+    const saved = localStorage.getItem('b2b_cache');
+    let b2bData = null;
+    if (saved) {
+      try {
+        b2bData = JSON.parse(saved);
+        if (b2bData.timestamp) setLastSync(b2bData.timestamp);
+        setIsUsingCache(true);
+      } catch (e) {
+        console.error('Cache error');
+      }
+    }
+
+    // If no local cache, try to load from Cloud Firestore
+    if (!b2bData) {
+      try {
+        const q = query(collection(db, 'b2b_data'), orderBy('syncedAt', 'desc'));
+        const snapshot = await getDocs(q);
+        const docs = [];
+        snapshot.forEach(doc => docs.push(doc.data()));
+        if (docs.length > 0) {
+          b2bData = { customers: docs, timestamp: docs[0].syncedAt };
+          setLastSync(docs[0].syncedAt);
+          setIsUsingCache(true);
+          localStorage.setItem('b2b_cache', JSON.stringify(b2bData));
+        }
+      } catch (e) {
+        console.error("Cloud load failed", e);
+      }
+    }
+
+    try {
+      if (b2bData) {
+        const customerList = Array.isArray(b2bData.customers) ? b2bData.customers : (b2bData.customers?.customers || []);
+        
+        const sortedCustomers = [...customerList].sort((a, b) => {
+          const dateA = a.last_purchase ? new Date(a.last_purchase).getTime() : 0;
+          const dateB = b.last_purchase ? new Date(b.last_purchase).getTime() : 0;
+          return dateB - dateA;
+        });
+
+        setCustomers(sortedCustomers.slice(0, 8));
+
+        const now = new Date();
+        const thisMonth = now.toISOString().substring(0, 7);
+        const b2bCount = customerList.length;
+        
+        const monthlyOrders = customerList.reduce((acc, c) => {
+            return acc + (c.orders || []).filter(o => o.date_add.startsWith(thisMonth)).length;
+        }, 0);
+
+        const totalSpent = customerList.reduce((acc, c) => acc + (parseFloat(c.total_spent) || 0), 0);
+
+        setStats([
+          { name: 'Clientes B2B', value: b2bCount, icon: Users, trend: 'Actualizado', color: '#3b82f6' },
+          { name: 'Ventas Totales B2B', value: totalSpent.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }), icon: TrendingUp, trend: 'En vivo', color: '#8b5cf6' },
+          { name: 'Pedidos (Mes Actual)', value: monthlyOrders, icon: ShoppingBag, trend: 'Nuevo', color: '#22c55e' },
+          { name: 'Estado Sincro', value: 'En Caché', icon: Database, trend: 'Veloz', color: '#f59e0b' },
+        ]);
+      } else {
+        setStats([
+          { name: 'Clientes B2B', value: '—', icon: Users, trend: '—', color: '#3b82f6' },
+          { name: 'Ventas Totales B2B', value: '—', icon: TrendingUp, trend: '—', color: '#8b5cf6' },
+          { name: 'Pedidos (Mes Actual)', value: '—', icon: ShoppingBag, trend: '—', color: '#22c55e' },
+          { name: 'Estado Sincro', value: 'Sin Datos', icon: Database, trend: 'Escanea Web', color: '#f59e0b' },
+        ]);
+      }
+    } catch (err) {
+      console.error('Dashboard load failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadDashboard = async () => {
-      setLoading(true);
-      
-      // Try to load from cache
-      const saved = localStorage.getItem('b2b_cache');
-      let b2bData = null;
-      if (saved) {
-        try {
-          b2bData = JSON.parse(saved);
-          setIsUsingCache(true);
-        } catch (e) {
-          console.error('Cache error');
-        }
-      }
-
-      // If no local cache, try to load from Cloud Firestore
-      if (!b2bData) {
-        try {
-          const q = query(collection(db, 'b2b_data'), orderBy('syncedAt', 'desc'));
-          const snapshot = await getDocs(q);
-          const docs = [];
-          snapshot.forEach(doc => docs.push(doc.data()));
-          if (docs.length > 0) {
-            b2bData = { customers: docs };
-            setIsUsingCache(true);
-            localStorage.setItem('b2b_cache', JSON.stringify(b2bData));
-          }
-        } catch (e) {
-          console.error("Cloud load failed", e);
-        }
-      }
-
-      try {
-        if (b2bData) {
-          const customerList = Array.isArray(b2bData.customers) ? b2bData.customers : (b2bData.customers?.customers || []);
-          
-          const sortedCustomers = [...customerList].sort((a, b) => {
-            const dateA = a.last_purchase ? new Date(a.last_purchase).getTime() : 0;
-            const dateB = b.last_purchase ? new Date(b.last_purchase).getTime() : 0;
-            return dateB - dateA;
-          });
-
-          setCustomers(sortedCustomers.slice(0, 8));
-
-          const now = new Date();
-          const thisMonth = now.toISOString().substring(0, 7);
-          const b2bCount = customerList.length;
-          
-          const monthlyOrders = customerList.reduce((acc, c) => {
-              return acc + (c.orders || []).filter(o => o.date_add.startsWith(thisMonth)).length;
-          }, 0);
-
-          const totalSpent = customerList.reduce((acc, c) => acc + (parseFloat(c.total_spent) || 0), 0);
-
-          setStats([
-            { name: 'Clientes B2B', value: b2bCount, icon: Users, trend: '+4%', color: '#3b82f6' },
-            { name: 'Ventas Totales B2B', value: totalSpent.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }), icon: TrendingUp, trend: '+12%', color: '#8b5cf6' },
-            { name: 'Pedidos (Mes Actual)', value: monthlyOrders, icon: ShoppingBag, trend: '+8%', color: '#22c55e' },
-            { name: 'Estado Sincro', value: 'En Caché', icon: Database, trend: 'Veloz', color: '#f59e0b' },
-          ]);
-        } else {
-          setStats([
-            { name: 'Clientes B2B', value: '—', icon: Users, trend: '—', color: '#3b82f6' },
-            { name: 'Ventas Totales B2B', value: '—', icon: TrendingUp, trend: '—', color: '#8b5cf6' },
-            { name: 'Pedidos (Mes Actual)', value: '—', icon: ShoppingBag, trend: '—', color: '#22c55e' },
-            { name: 'Estado Sincro', value: 'Sin Datos', icon: Database, trend: 'Escanea Web', color: '#f59e0b' },
-          ]);
-        }
-      } catch (err) {
-        console.error('Dashboard load failed:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadDashboard();
+
+    // Listener para actualizar cuando el escaneo termine (incluso en la misma pestaña)
+    const handleRefresh = () => loadDashboard();
+    window.addEventListener('b2b-cache-updated', handleRefresh);
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'b2b_cache') handleRefresh();
+    });
+
+    return () => {
+      window.removeEventListener('b2b-cache-updated', handleRefresh);
+      window.removeEventListener('storage', handleRefresh);
+    };
   }, []);
 
   if (loading) {
@@ -185,12 +200,19 @@ export default function DashboardPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="glass-card" style={{ background: isUsingCache ? 'linear-gradient(180deg, rgba(34, 197, 94, 0.05) 0%, transparent 100%)' : 'rgba(255,255,255,0.02)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              <div style={{ padding: '0.5rem', background: isUsingCache ? 'rgba(34, 197, 94, 0.1)' : 'rgba(148, 163, 184, 0.1)', borderRadius: '8px' }}>
-                <Activity size={20} color={isUsingCache ? '#22c55e' : '#94a3b8'} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <div style={{ padding: '0.5rem', background: isUsingCache ? 'rgba(34, 197, 94, 0.1)' : 'rgba(148, 163, 184, 0.1)', borderRadius: '8px' }}>
+                  <Activity size={20} color={isUsingCache ? '#22c55e' : '#94a3b8'} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Estado de la Información</h3>
+                  {lastSync && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block' }}>
+                      Último escaneo: {new Date(lastSync).toLocaleString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
               </div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Estado de la Información</h3>
-            </div>
             
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
               {isUsingCache 
